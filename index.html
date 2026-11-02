@@ -1,0 +1,1153 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>CHAOS REALM: Chaos Core</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  background:#000;
+  overflow:hidden;
+  font-family:'Courier New',monospace;
+  color:#fff;
+  touch-action:none;
+  user-select:none;
+  -webkit-user-select:none;
+}
+canvas{display:block;cursor:crosshair}
+
+#ui{
+  position:absolute;inset:0;
+  pointer-events:none;
+  z-index:10;
+  display:flex;flex-direction:column;
+  justify-content:space-between;
+  padding:14px;
+}
+.top-bar{
+  display:flex;justify-content:space-between;
+  flex-wrap:wrap;gap:8px;
+}
+.stat{
+  background:rgba(0,0,0,.7);
+  border:1px solid rgba(255,0,0,.4);
+  padding:8px 14px;
+  border-radius:8px;
+  font-size:14px;font-weight:bold;
+  letter-spacing:1px;
+}
+.stat span{color:#f55}
+.stat.score span{color:#0ff}
+
+/* HP бары */
+.hp-bar{
+  width:180px;height:12px;
+  background:rgba(0,0,0,.7);
+  border:1px solid #f55;
+  border-radius:6px;
+  overflow:hidden;
+  margin-top:3px;
+}
+.hp-fill{
+  height:100%;width:100%;
+  background:linear-gradient(90deg,#f00,#ff0);
+  transition:width .2s;
+}
+.boss-bar{
+  width:min(500px,80vw);height:18px;
+  background:rgba(0,0,0,.8);
+  border:2px solid #f00;
+  border-radius:9px;
+  overflow:hidden;
+  margin:8px auto 0;
+}
+.boss-fill{
+  height:100%;width:100%;
+  background:linear-gradient(90deg,#a00,#f00,#ff0);
+  transition:width .3s;
+}
+.boss-label{
+  text-align:center;
+  color:#f55;
+  font-size:14px;
+  font-weight:bold;
+  letter-spacing:3px;
+  text-shadow:0 0 10px #f00;
+  margin-top:4px;
+}
+
+.bottom-hint{
+  text-align:center;
+  color:rgba(255,80,80,.4);
+  font-size:12px;
+  padding-bottom:4px;
+}
+
+/* Меню */
+.menu{
+  position:absolute;inset:0;
+  z-index:100;
+  background:rgba(0,0,0,.94);
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  text-align:center;padding:20px;
+  pointer-events:auto;
+  visibility:visible;opacity:1;
+  transition:opacity .25s;
+}
+.hidden{
+  visibility:hidden!important;
+  opacity:0!important;
+  pointer-events:none!important;
+}
+h1{
+  font-size:min(13vw,72px);
+  letter-spacing:5px;
+  color:#f00;
+  text-shadow:0 0 30px #f00,3px 3px 0 #500;
+  animation:glitch 1.5s infinite;
+  margin-bottom:10px;
+}
+@keyframes glitch{
+  0%,100%{transform:translate(0)}
+  20%{transform:translate(-3px,3px)}
+  40%{transform:translate(3px,-3px)}
+  60%{transform:translate(-3px,-3px)}
+  80%{transform:translate(3px,3px)}
+}
+p{color:#a88;font-size:15px;line-height:1.6;margin-bottom:22px;max-width:540px}
+.btn{
+  padding:14px 42px;
+  font-size:18px;font-weight:bold;
+  font-family:'Courier New',monospace;
+  background:transparent;
+  border:2px solid #f00;
+  color:#f00;
+  cursor:pointer;
+  text-transform:uppercase;
+  letter-spacing:2px;
+  transition:.2s;
+  outline:none;
+}
+.btn:hover{background:#f00;color:#000;box-shadow:0 0 30px #f00}
+.final-score{font-size:36px;color:#ff0;margin:14px 0;text-shadow:0 0 20px #ff0}
+.hint{margin-top:15px;font-size:12px;color:#555}
+</style>
+</head>
+<body>
+
+<canvas id="game"></canvas>
+
+<div id="ui">
+  <div>
+    <div class="top-bar">
+      <div class="stat score">ОЧКИ: <span id="scoreVal">0</span></div>
+      <div class="stat">☠ УБИТО: <span id="killsVal">0</span></div>
+      <div class="stat">HP: <span id="hpVal">100</span>
+        <div class="hp-bar"><div class="hp-fill" id="hpFill"></div></div>
+      </div>
+    </div>
+    <div class="boss-label" id="bossLabel">💀 CHAOS CORE 💀</div>
+    <div class="boss-bar"><div class="boss-fill" id="bossFill"></div></div>
+  </div>
+  <div class="bottom-hint">WASD — движение | Мышь — прицел | ЛКМ — огонь | Пробел — рывок</div>
+</div>
+
+<!-- СТАРТ -->
+<div id="startMenu" class="menu">
+  <h1>CHAOS<br>CORE</h1>
+  <p>
+    Финальная битва вселенной CHAOS REALM.<br><br>
+    Ядро хаоса заразило все измерения.<br>
+    Оно призывает дронов, вирусов и стены данных.<br>
+    Уничтожь его, прежде чем оно уничтожит тебя.<br><br>
+    🎯 WASD — движение | Мышь — прицел | ЛКМ — огонь | Пробел — рывок
+  </p>
+  <button class="btn" id="btnStart">ВОЙТИ В ЯДРО 💀</button>
+  <div class="hint">У ядра 3 фазы. Каждая опаснее предыдущей.</div>
+</div>
+
+<!-- ПОБЕДА -->
+<div id="winMenu" class="menu hidden">
+  <h1 style="color:#0f0;text-shadow:0 0 30px #0f0">ЯДРО<br>УНИЧТОЖЕНО</h1>
+  <p>Вселенная CHAOS REALM спасена.<br>Ты прошёл все 5 игр. Легенда.</p>
+  <div class="final-score" id="winScore">0</div>
+  <button class="btn" id="btnWinRestart">ИГРАТЬ СНОВА ↺</button>
+</div>
+
+<!-- ПОРАЖЕНИЕ -->
+<div id="loseMenu" class="menu hidden">
+  <h1>ПОГЛОЩЁН<br>ХАОСОМ</h1>
+  <p>Ядро оказалось сильнее...</p>
+  <div class="final-score" id="loseScore">0</div>
+  <button class="btn" id="btnLoseRestart">ПОПРОБОВАТЬ СНОВА ↺</button>
+</div>
+
+<script>
+// ============================================================
+// AUDIO
+// ============================================================
+let audioCtx=null;
+function initAudio(){
+  if(!audioCtx)audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+  if(audioCtx.state==='suspended')audioCtx.resume();
+}
+function tone(freq,type,dur,vol,delay=0){
+  if(!audioCtx)return;
+  const t=audioCtx.currentTime+delay;
+  const o=audioCtx.createOscillator();
+  const g=audioCtx.createGain();
+  o.type=type;o.frequency.setValueAtTime(freq,t);
+  g.gain.setValueAtTime(vol,t);
+  g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+  o.connect(g);g.connect(audioCtx.destination);
+  o.start(t);o.stop(t+dur+0.05);
+}
+function noiseBuf(dur,vol,freq){
+  if(!audioCtx)return;
+  const t=audioCtx.currentTime;
+  const bs=audioCtx.sampleRate*dur;
+  const buf=audioCtx.createBuffer(1,bs,audioCtx.sampleRate);
+  const d=buf.getChannelData(0);
+  for(let i=0;i<bs;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/bs,2);
+  const src=audioCtx.createBufferSource();src.buffer=buf;
+  const f=audioCtx.createBiquadFilter();f.type='lowpass';f.frequency.value=freq;
+  const g=audioCtx.createGain();g.gain.setValueAtTime(vol,t);
+  g.gain.exponentialRampToValueAtTime(0.001,t+dur);
+  src.connect(f);f.connect(g);g.connect(audioCtx.destination);
+  src.start();
+}
+const SFX={
+  shoot(){tone(600,'square',0.07,0.05);noiseBuf(0.04,0.03,2000)},
+  enemyShoot(){tone(300,'sawtooth',0.1,0.04)},
+  hit(){tone(200,'square',0.08,0.08);noiseBuf(0.06,0.06,800)},
+  explode(){noiseBuf(0.3,0.18,600);tone(80,'sine',0.3,0.12)},
+  teleport(){tone(1200,'sine',0.1,0.05);tone(1800,'sine',0.1,0.04,0.05)},
+  playerHurt(){tone(150,'sawtooth',0.2,0.1);noiseBuf(0.12,0.08,400)},
+  dash(){tone(400,'square',0.1,0.07);tone(800,'square',0.1,0.05,0.05)},
+  bossHurt(){tone(100,'sawtooth',0.15,0.1);noiseBuf(0.1,0.08,300)},
+  phaseChange(){tone(60,'sine',1,0.2);tone(80,'sine',1,0.15,0.1);noiseBuf(0.5,0.1,200)},
+  win(){[523,659,784,1046,1318,1568,2093].forEach((f,i)=>tone(f,'triangle',0.3,0.09,i*0.12))},
+  death(){tone(200,'sawtooth',0.5,0.2);noiseBuf(0.5,0.25,300);tone(50,'sine',0.8,0.2,0.2)}
+};
+
+// ============================================================
+// CANVAS
+// ============================================================
+const canvas=document.getElementById('game');
+const ctx=canvas.getContext('2d');
+const PI2=Math.PI*2;
+let W,H;
+function resize(){
+  W=window.innerWidth;H=window.innerHeight;
+  canvas.width=W;canvas.height=H;
+  if(player){
+    player.x=Math.max(20,Math.min(W-20,player.x));
+    player.y=Math.max(20,Math.min(H-20,player.y));
+  }
+}
+window.addEventListener('resize',resize);
+
+// ============================================================
+// DOM
+// ============================================================
+const scoreVal=document.getElementById('scoreVal');
+const killsVal=document.getElementById('killsVal');
+const hpVal=document.getElementById('hpVal');
+const hpFill=document.getElementById('hpFill');
+const bossFill=document.getElementById('bossFill');
+const bossLabel=document.getElementById('bossLabel');
+
+const startMenu=document.getElementById('startMenu');
+const winMenu=document.getElementById('winMenu');
+const loseMenu=document.getElementById('loseMenu');
+const btnStart=document.getElementById('btnStart');
+const btnWinRestart=document.getElementById('btnWinRestart');
+const btnLoseRestart=document.getElementById('btnLoseRestart');
+const winScore=document.getElementById('winScore');
+const loseScore=document.getElementById('loseScore');
+
+// ============================================================
+// GAME STATE
+// ============================================================
+const game={
+  playing:false,
+  rafId:null,
+  lastTime:0,
+  frame:0,
+  score:0,
+  kills:0,
+  shake:0,
+  bullets:[],
+  enemyBullets:[],
+  enemies:[],
+  walls:[],
+  particles:[],
+  floats:[],
+  mouse:{x:0,y:0},
+  mouseDown:false,
+  spawnTimer:0
+};
+
+let player=null;
+let boss=null;
+const keys={};
+
+// ============================================================
+// PLAYER
+// ============================================================
+class Player{
+  constructor(){
+    this.x=W/2;
+    this.y=H*0.75;
+    this.r=14;
+    this.speed=4;
+    this.hp=100;
+    this.maxHp=100;
+    this.shootCD=0;
+    this.dashCD=0;
+    this.dashTimer=0;
+    this.invincible=0;
+    this.angle=0;
+  }
+  update(dt){
+    this.angle=Math.atan2(game.mouse.y-this.y,game.mouse.x-this.x);
+
+    if(this.dashTimer>0){
+      this.dashTimer-=dt;
+      const ds=14;
+      this.x+=Math.cos(this.angle)*ds*dt*60;
+      this.y+=Math.sin(this.angle)*ds*dt*60;
+    }else{
+      let mx=0,my=0;
+      if(keys.KeyW||keys.ArrowUp)my-=1;
+      if(keys.KeyS||keys.ArrowDown)my+=1;
+      if(keys.KeyA||keys.ArrowLeft)mx-=1;
+      if(keys.KeyD||keys.ArrowRight)mx+=1;
+      if(mx!==0||my!==0){
+        const mag=Math.hypot(mx,my);
+        this.x+=(mx/mag)*this.speed*dt*60;
+        this.y+=(my/mag)*this.speed*dt*60;
+      }
+    }
+
+    this.x=Math.max(this.r,Math.min(W-this.r,this.x));
+    this.y=Math.max(this.r,Math.min(H-this.r,this.y));
+
+    if(this.shootCD>0)this.shootCD-=dt*60;
+    if(this.dashCD>0)this.dashCD-=dt*60;
+    if(this.invincible>0)this.invincible-=dt*60;
+
+    if(game.mouseDown&&this.shootCD<=0){
+      this.shoot();
+      this.shootCD=8;
+    }
+  }
+  shoot(){
+    const bx=this.x+Math.cos(this.angle)*20;
+    const by=this.y+Math.sin(this.angle)*20;
+    game.bullets.push({
+      x:bx,y:by,
+      vx:Math.cos(this.angle)*11,
+      vy:Math.sin(this.angle)*11,
+      r:4,life:80
+    });
+    SFX.shoot();
+    this.x-=Math.cos(this.angle)*2;
+    this.y-=Math.sin(this.angle)*2;
+  }
+  dash(){
+    if(this.dashCD<=0&&this.dashTimer<=0){
+      this.dashTimer=0.15;
+      this.dashCD=60;
+      this.invincible=10;
+      SFX.dash();
+      addBurst(this.x,this.y,'#0ff',8);
+    }
+  }
+  takeDamage(dmg){
+    if(this.invincible>0)return;
+    this.hp-=dmg;
+    this.invincible=30;
+    game.shake=8;
+    SFX.playerHurt();
+    addBurst(this.x,this.y,'#f55',10);
+    updateHUD();
+    if(this.hp<=0){
+      this.hp=0;
+      endGame(false);
+    }
+  }
+  draw(){
+    ctx.save();
+    ctx.translate(this.x,this.y);
+    if(this.invincible>0&&Math.floor(this.invincible/3)%2===0)ctx.globalAlpha=0.4;
+    ctx.shadowBlur=20;
+    ctx.shadowColor='#0ff';
+    ctx.fillStyle='#0ff';
+    ctx.beginPath();
+    ctx.arc(0,0,this.r,0,PI2);
+    ctx.fill();
+    ctx.fillStyle='#000';
+    ctx.beginPath();
+    ctx.arc(0,0,this.r*0.6,0,PI2);
+    ctx.fill();
+    ctx.fillStyle='#0ff';
+    ctx.beginPath();
+    ctx.arc(Math.cos(this.angle)*6,Math.sin(this.angle)*6,4,0,PI2);
+    ctx.fill();
+    ctx.shadowBlur=0;
+    ctx.strokeStyle='rgba(0,255,255,.3)';
+    ctx.lineWidth=1;
+    ctx.setLineDash([5,5]);
+    ctx.beginPath();
+    ctx.moveTo(Math.cos(this.angle)*20,Math.sin(this.angle)*20);
+    ctx.lineTo(Math.cos(this.angle)*60,Math.sin(this.angle)*60);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+}
+
+// ============================================================
+// BOSS: CHAOS CORE
+// ============================================================
+class ChaosCore{
+  constructor(){
+    this.x=W/2;
+    this.y=H*0.25;
+    this.r=60;
+    this.hp=1000;
+    this.maxHp=1000;
+    this.phase=1; // 1, 2, 3
+    this.angle=0;
+    this.shootCD=60;
+    this.teleportCD=200;
+    this.spawnCD=180;
+    this.flash=0;
+    this.pulsePhase=0;
+  }
+
+  update(dt){
+    this.angle+=dt*0.5;
+    this.pulsePhase+=dt*3;
+    if(this.flash>0)this.flash-=dt*60;
+
+    // Определение фазы
+    const hpPct=this.hp/this.maxHp;
+    let newPhase=1;
+    if(hpPct<=0.66)newPhase=2;
+    if(hpPct<=0.33)newPhase=3;
+    if(newPhase!==this.phase){
+      this.phase=newPhase;
+      SFX.phaseChange();
+      game.shake=15;
+      addFloat(this.x,this.y-80,'⚠ ФАЗА '+this.phase+' ⚠','#f00',28);
+      updateBossLabel();
+    }
+
+    // Движение: медленное вращение вокруг центра
+    const cx=W/2,cy=H*0.3;
+    const orbitR=80;
+    this.x=cx+Math.cos(this.angle*0.3)*orbitR;
+    this.y=cy+Math.sin(this.angle*0.3)*orbitR*0.5;
+
+    // Стрельба (чаще с фазами)
+    this.shootCD-=dt*60;
+    const shootInterval=this.phase===1?60:this.phase===2?40:25;
+    if(this.shootCD<=0){
+      this.shootVolley();
+      this.shootCD=shootInterval;
+    }
+
+    // Телепорт (реже)
+    this.teleportCD-=dt*60;
+    const teleportInterval=this.phase===1?200:this.phase===2?150:100;
+    if(this.teleportCD<=0){
+      this.teleport();
+      this.teleportCD=teleportInterval;
+    }
+
+    // Спавн врагов
+    this.spawnCD-=dt*60;
+    const spawnInterval=this.phase===1?180:this.phase===2?120:80;
+    if(this.spawnCD<=0){
+      this.spawnMinion();
+      this.spawnCD=spawnInterval;
+    }
+  }
+
+  shootVolley(){
+    const count=this.phase===1?5:this.phase===2?7:9;
+    const baseAngle=Math.atan2(player.y-this.y,player.x-this.x);
+    for(let i=0;i<count;i++){
+      const a=baseAngle+(i-(count-1)/2)*0.25;
+      game.enemyBullets.push({
+        x:this.x,y:this.y,
+        vx:Math.cos(a)*4,
+        vy:Math.sin(a)*4,
+        r:6,life:150,
+        color:'#f00'
+      });
+    }
+    SFX.enemyShoot();
+  }
+
+  teleport(){
+    addBurst(this.x,this.y,'#f00',15);
+    SFX.teleport();
+    this.x=100+Math.random()*(W-200);
+    this.y=80+Math.random()*(H*0.4);
+    addBurst(this.x,this.y,'#f00',15);
+  }
+
+  spawnMinion(){
+    const types=['drone','virus'];
+    if(this.phase>=2)types.push('drone');
+    if(this.phase>=3)types.push('virus','drone');
+    const type=types[Math.floor(Math.random()*types.length)];
+
+    const sx=50+Math.random()*(W-100);
+    const sy=50+Math.random()*(H-100);
+
+    // Не спавним слишком близко к игроку
+    if(Math.hypot(sx-player.x,sy-player.y)<150)return;
+
+    game.enemies.push(new Enemy(type,sx,sy));
+    addBurst(sx,sy,'#f0f',8);
+  }
+
+  takeDamage(dmg){
+    this.hp-=dmg;
+    this.flash=4;
+    SFX.bossHurt();
+    updateHUD();
+    if(this.hp<=0){
+      this.hp=0;
+      endGame(true);
+    }
+  }
+
+  draw(){
+    ctx.save();
+    ctx.translate(this.x,this.y);
+
+    const pulse=1+Math.sin(this.pulsePhase)*0.08;
+    const r=this.r*pulse;
+
+    // Внешнее кольцо
+    ctx.strokeStyle=this.flash>0?'#fff':'#f00';
+    ctx.lineWidth=3;
+    ctx.shadowBlur=25;
+    ctx.shadowColor='#f00';
+    ctx.beginPath();
+    ctx.arc(0,0,r+10,0,PI2);
+    ctx.stroke();
+
+    // Вращающиеся сегменты
+    for(let i=0;i<6;i++){
+      const a=this.angle+(i/6)*PI2;
+      ctx.fillStyle=this.flash>0?'#fff':'#a00';
+      ctx.beginPath();
+      ctx.arc(Math.cos(a)*r,Math.sin(a)*r,12,0,PI2);
+      ctx.fill();
+    }
+
+    // Ядро
+    const grad=ctx.createRadialGradient(0,0,5,0,0,r);
+    grad.addColorStop(0,this.flash>0?'#fff':'#ff0');
+    grad.addColorStop(0.5,this.flash>0?'#faa':'#f00');
+    grad.addColorStop(1,'#500');
+    ctx.fillStyle=grad;
+    ctx.beginPath();
+    ctx.arc(0,0,r,0,PI2);
+    ctx.fill();
+
+    // Глаз
+    ctx.fillStyle='#000';
+    ctx.beginPath();
+    ctx.arc(0,0,r*0.4,0,PI2);
+    ctx.fill();
+    const eyeAngle=Math.atan2(player.y-this.y,player.x-this.x);
+    ctx.fillStyle='#f00';
+    ctx.beginPath();
+    ctx.arc(Math.cos(eyeAngle)*r*0.2,Math.sin(eyeAngle)*r*0.2,r*0.15,0,PI2);
+    ctx.fill();
+
+    ctx.shadowBlur=0;
+    ctx.restore();
+  }
+}
+
+function updateBossLabel(){
+  if(!boss)return;
+  const phases=['💀 CHAOS CORE 💀','💀 CHAOS CORE: ФАЗА 2 💀','🔥 CHAOS CORE: ФИНАЛЬНАЯ ФАЗА 🔥'];
+  bossLabel.textContent=phases[boss.phase-1];
+}
+
+// ============================================================
+// ENEMIES (упрощённые из Void Shooter)
+// ============================================================
+class Enemy{
+  constructor(type,x,y){
+    this.type=type;
+    this.x=x;
+    this.y=y;
+    this.dead=false;
+    this.flash=0;
+
+    if(type==='drone'){
+      this.r=14;
+      this.hp=20;
+      this.maxHp=20;
+      this.shootCD=90;
+      this.teleportCD=150;
+      this.color='#f0f';
+      this.score=100;
+    }else if(type==='virus'){
+      this.r=12;
+      this.hp=25;
+      this.maxHp=25;
+      this.speed=2;
+      this.color='#f55';
+      this.score=150;
+    }
+  }
+
+  update(dt){
+    if(this.flash>0)this.flash-=dt*60;
+    const dx=player.x-this.x;
+    const dy=player.y-this.y;
+    const dist=Math.hypot(dx,dy)||1;
+
+    if(this.type==='drone'){
+      this.teleportCD-=dt*60;
+      if(this.teleportCD<=0){
+        addBurst(this.x,this.y,this.color,6);
+        SFX.teleport();
+        let nx,ny,att=0;
+        do{
+          nx=40+Math.random()*(W-80);
+          ny=40+Math.random()*(H-80);
+          att++;
+        }while(Math.hypot(nx-player.x,ny-player.y)<150&&att<20);
+        this.x=nx;this.y=ny;
+        addBurst(this.x,this.y,this.color,6);
+        this.teleportCD=150;
+      }
+      this.shootCD-=dt*60;
+      if(this.shootCD<=0&&dist<400){
+        game.enemyBullets.push({
+          x:this.x,y:this.y,
+          vx:(dx/dist)*4,
+          vy:(dy/dist)*4,
+          r:4,life:150,
+          color:this.color
+        });
+        SFX.enemyShoot();
+        this.shootCD=90;
+      }
+    }
+    else if(this.type==='virus'){
+      if(dist>0){
+        this.x+=(dx/dist)*this.speed*dt*60;
+        this.y+=(dy/dist)*this.speed*dt*60;
+      }
+      if(dist<this.r+player.r){
+        player.takeDamage(15);
+        this.explode();
+      }
+    }
+  }
+
+  explode(){
+    this.dead=true;
+    addBurst(this.x,this.y,this.color,12);
+    SFX.explode();
+    game.shake=4;
+  }
+
+  takeDamage(dmg){
+    this.hp-=dmg;
+    this.flash=5;
+    if(this.hp<=0){
+      this.dead=true;
+      game.kills++;
+      game.score+=this.score;
+      addBurst(this.x,this.y,this.color,15);
+      SFX.explode();
+      game.shake=3;
+      updateHUD();
+    }
+  }
+
+  draw(){
+    ctx.save();
+    ctx.translate(this.x,this.y);
+    if(Math.random()<0.1)ctx.translate((Math.random()-0.5)*5,(Math.random()-0.5)*5);
+
+    const color=this.flash>0?'#fff':this.color;
+    ctx.shadowBlur=12;
+    ctx.shadowColor=color;
+    ctx.fillStyle=color;
+
+    if(this.type==='drone'){
+      ctx.beginPath();
+      ctx.moveTo(0,-this.r);
+      ctx.lineTo(this.r,0);
+      ctx.lineTo(0,this.r);
+      ctx.lineTo(-this.r,0);
+      ctx.closePath();
+      ctx.fill();
+    }else{
+      ctx.beginPath();
+      for(let i=0;i<8;i++){
+        const a=(i/8)*PI2;
+        const r1=this.r,r2=this.r*0.6;
+        ctx.lineTo(Math.cos(a)*r1,Math.sin(a)*r1);
+        ctx.lineTo(Math.cos(a+PI2/16)*r2,Math.sin(a+PI2/16)*r2);
+      }
+      ctx.closePath();
+      ctx.fill();
+    }
+
+    ctx.shadowBlur=0;
+
+    if(this.hp<this.maxHp){
+      const bw=this.r*2;
+      ctx.fillStyle='rgba(0,0,0,.6)';
+      ctx.fillRect(-bw/2,-this.r-8,bw,3);
+      ctx.fillStyle='#0f0';
+      ctx.fillRect(-bw/2,-this.r-8,bw*(this.hp/this.maxHp),3);
+    }
+
+    ctx.restore();
+  }
+}
+
+// ============================================================
+// WALLS (из Data Breach)
+// ============================================================
+class DataWall{
+  constructor(){
+    this.horizontal=Math.random()<0.5;
+    if(this.horizontal){
+      this.w=100+Math.random()*120;
+      this.h=12;
+    }else{
+      this.w=12;
+      this.h=100+Math.random()*120;
+    }
+    this.x=50+Math.random()*(W-100-this.w);
+    this.y=50+Math.random()*(H-100-this.h);
+    this.life=240+Math.random()*120;
+  }
+  update(dt){this.life-=dt*60}
+  draw(){
+    const alpha=Math.min(1,this.life/30);
+    ctx.save();
+    ctx.globalAlpha=alpha*0.7;
+    ctx.fillStyle='#f0f';
+    ctx.shadowBlur=8;
+    ctx.shadowColor='#f0f';
+    ctx.fillRect(this.x,this.y,this.w,this.h);
+    ctx.restore();
+  }
+}
+
+// ============================================================
+// EFFECTS
+// ============================================================
+function addBurst(x,y,color,count){
+  for(let i=0;i<count;i++){
+    const a=Math.random()*PI2;
+    const s=2+Math.random()*4;
+    game.particles.push({
+      x,y,
+      vx:Math.cos(a)*s,
+      vy:Math.sin(a)*s,
+      life:1,
+      size:2+Math.random()*3,
+      color
+    });
+  }
+}
+function addFloat(x,y,text,color,size){
+  game.floats.push({x,y,text,color,size,life:1,vy:-40});
+}
+function updateEffects(dt){
+  for(let i=game.particles.length-1;i>=0;i--){
+    const p=game.particles[i];
+    p.x+=p.vx*dt*60;
+    p.y+=p.vy*dt*60;
+    p.vy+=0.1*dt*60;
+    p.life-=dt*1.5;
+    if(p.life<=0)game.particles.splice(i,1);
+  }
+  for(let i=game.floats.length-1;i>=0;i--){
+    const f=game.floats[i];
+    f.y+=f.vy*dt;
+    f.life-=dt*0.8;
+    if(f.life<=0)game.floats.splice(i,1);
+  }
+}
+
+// ============================================================
+// UPDATE
+// ============================================================
+function update(dt){
+  if(!game.playing)return;
+  game.frame++;
+
+  player.update(dt);
+  boss.update(dt);
+
+  // Враги
+  for(let i=game.enemies.length-1;i>=0;i--){
+    const e=game.enemies[i];
+    e.update(dt);
+    if(e.dead)game.enemies.splice(i,1);
+  }
+
+  // Пули игрока
+  for(let i=game.bullets.length-1;i>=0;i--){
+    const b=game.bullets[i];
+    b.x+=b.vx*dt*60;
+    b.y+=b.vy*dt*60;
+    b.life--;
+    let removed=false;
+
+    // Попадание в босса
+    const bDist=Math.hypot(b.x-boss.x,b.y-boss.y);
+    if(bDist<b.r+boss.r){
+      boss.takeDamage(5);
+      addBurst(b.x,b.y,'#0ff',4);
+      SFX.hit();
+      game.bullets.splice(i,1);
+      continue;
+    }
+
+    // Попадание во врагов
+    for(const e of game.enemies){
+      const d=Math.hypot(b.x-e.x,b.y-e.y);
+      if(d<b.r+e.r){
+        e.takeDamage(10);
+        addBurst(b.x,b.y,'#0ff',4);
+        SFX.hit();
+        game.bullets.splice(i,1);
+        removed=true;
+        break;
+      }
+    }
+    if(removed)continue;
+
+    // Стены
+    for(const w of game.walls){
+      if(b.x>w.x&&b.x<w.x+w.w&&b.y>w.y&&b.y<w.y+w.h){
+        addBurst(b.x,b.y,'#f0f',3);
+        game.bullets.splice(i,1);
+        removed=true;
+        break;
+      }
+    }
+    if(removed)continue;
+
+    if(b.life<=0||b.x<0||b.x>W||b.y<0||b.y>H){
+      game.bullets.splice(i,1);
+    }
+  }
+
+  // Пули врагов
+  for(let i=game.enemyBullets.length-1;i>=0;i--){
+    const b=game.enemyBullets[i];
+    b.x+=b.vx*dt*60;
+    b.y+=b.vy*dt*60;
+    b.life--;
+    const d=Math.hypot(b.x-player.x,b.y-player.y);
+    if(d<b.r+player.r){
+      player.takeDamage(10);
+      game.enemyBullets.splice(i,1);
+      continue;
+    }
+    if(b.life<=0||b.x<0||b.x>W||b.y<0||b.y>H){
+      game.enemyBullets.splice(i,1);
+    }
+  }
+
+  // Стены
+  for(let i=game.walls.length-1;i>=0;i--){
+    const w=game.walls[i];
+    w.update(dt);
+    // Отталкивание игрока
+    if(player.x+player.r>w.x&&player.x-player.r<w.x+w.w&&
+       player.y+player.r>w.y&&player.y-player.r<w.y+w.h){
+      const cx=w.x+w.w/2,cy=w.y+w.h/2;
+      const dx=player.x-cx,dy=player.y-cy;
+      const dist=Math.hypot(dx,dy)||1;
+      player.x+=dx/dist*3;
+      player.y+=dy/dist*3;
+    }
+    if(w.life<=0)game.walls.splice(i,1);
+  }
+
+  // Спавн стен
+  if(game.frame%300===0&&game.walls.length<3){
+    game.walls.push(new DataWall());
+  }
+
+  updateEffects(dt);
+
+  if(game.shake>0){
+    game.shake*=0.9;
+    if(game.shake<0.5)game.shake=0;
+  }
+}
+
+// ============================================================
+// DRAW
+// ============================================================
+function draw(){
+  ctx.fillStyle='#050505';
+  ctx.fillRect(0,0,W,H);
+
+  ctx.save();
+  if(game.shake>0){
+    ctx.translate((Math.random()-0.5)*game.shake,(Math.random()-0.5)*game.shake);
+  }
+
+  // Фоновая сетка
+  ctx.strokeStyle='rgba(255,0,0,.03)';
+  ctx.lineWidth=1;
+  for(let x=0;x<W;x+=50){
+    ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();
+  }
+  for(let y=0;y<H;y+=50){
+    ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();
+  }
+
+  // Стены
+  game.walls.forEach(w=>w.draw());
+
+  // Пули игрока
+  ctx.fillStyle='#0ff';
+  ctx.shadowBlur=8;
+  ctx.shadowColor='#0ff';
+  game.bullets.forEach(b=>{
+    ctx.beginPath();
+    ctx.arc(b.x,b.y,b.r,0,PI2);
+    ctx.fill();
+  });
+  ctx.shadowBlur=0;
+
+  // Пули врагов
+  game.enemyBullets.forEach(b=>{
+    ctx.fillStyle=b.color||'#f0f';
+    ctx.shadowBlur=8;
+    ctx.shadowColor=b.color||'#f0f';
+    ctx.beginPath();
+    ctx.arc(b.x,b.y,b.r,0,PI2);
+    ctx.fill();
+  });
+  ctx.shadowBlur=0;
+
+  // Враги
+  game.enemies.forEach(e=>e.draw());
+
+  // Босс
+  boss.draw();
+
+  // Игрок
+  player.draw();
+
+  // Частицы
+  for(const p of game.particles){
+    ctx.globalAlpha=Math.max(0,p.life);
+    ctx.fillStyle=p.color;
+    ctx.fillRect(p.x,p.y,p.size,p.size);
+  }
+  ctx.globalAlpha=1;
+
+  // Всплывающий текст
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+  for(const f of game.floats){
+    ctx.globalAlpha=Math.max(0,f.life);
+    ctx.fillStyle=f.color;
+    ctx.font='bold '+f.size+'px Courier New';
+    ctx.fillText(f.text,f.x,f.y);
+  }
+  ctx.globalAlpha=1;
+
+  ctx.restore();
+
+  // Сканлайны
+  ctx.fillStyle='rgba(0,0,0,.08)';
+  for(let y=0;y<H;y+=4){
+    ctx.fillRect(0,y,W,1);
+  }
+
+  // Глитч-блоки
+  if(Math.random()<0.02){
+    const gh=Math.random()*30+5;
+    const gy=Math.random()*H;
+    ctx.fillStyle=`rgba(${Math.random()*255|0},${Math.random()*255|0},${Math.random()*255|0},.3)`;
+    ctx.fillRect(Math.random()*W,gy,Math.random()*200,gh);
+  }
+
+  // Виньетка (красная для атмосферы)
+  const vig=ctx.createRadialGradient(W/2,H/2,H*0.3,W/2,H/2,H*0.9);
+  vig.addColorStop(0,'rgba(0,0,0,0)');
+  vig.addColorStop(1,'rgba(80,0,0,.35)');
+  ctx.fillStyle=vig;
+  ctx.fillRect(0,0,W,H);
+}
+
+// ============================================================
+// HUD
+// ============================================================
+function updateHUD(){
+  scoreVal.textContent=game.score;
+  killsVal.textContent=game.kills;
+  hpVal.textContent=Math.max(0,Math.ceil(player.hp));
+  hpFill.style.width=Math.max(0,player.hp/player.maxHp*100)+'%';
+  if(boss){
+    bossFill.style.width=(boss.hp/boss.maxHp*100)+'%';
+  }
+}
+
+// ============================================================
+// GAME FLOW
+// ============================================================
+function startGame(){
+  initAudio();
+  btnStart.blur();
+  btnWinRestart.blur();
+  btnLoseRestart.blur();
+
+  startMenu.classList.add('hidden');
+  winMenu.classList.add('hidden');
+  loseMenu.classList.add('hidden');
+
+  game.playing=true;
+  game.frame=0;
+  game.score=0;
+  game.kills=0;
+  game.shake=0;
+  game.bullets=[];
+  game.enemyBullets=[];
+  game.enemies=[];
+  game.walls=[];
+  game.particles=[];
+  game.floats=[];
+  game.spawnTimer=0;
+
+  resize();
+  player=new Player();
+  boss=new ChaosCore();
+  updateBossLabel();
+  updateHUD();
+
+  if(game.rafId)cancelAnimationFrame(game.rafId);
+  game.lastTime=performance.now();
+  game.rafId=requestAnimationFrame(loop);
+}
+
+function endGame(won){
+  game.playing=false;
+  if(won){
+    game.score+=5000;
+    SFX.win();
+    game.shake=20;
+    winScore.textContent=game.score;
+    updateHUD();
+    setTimeout(()=>{
+      winMenu.classList.remove('hidden');
+    },800);
+  }else{
+    SFX.death();
+    game.shake=20;
+    loseScore.textContent=game.score;
+    setTimeout(()=>{
+      loseMenu.classList.remove('hidden');
+    },600);
+  }
+}
+
+function loop(now){
+  if(!game.playing){
+    draw();
+    if(game.shake>0){
+      game.shake*=0.9;
+      game.rafId=requestAnimationFrame(loop);
+    }
+    return;
+  }
+
+  let dt=(now-game.lastTime)/1000;
+  if(!isFinite(dt)||dt<0)dt=0;
+  if(dt>0.05)dt=0.05;
+  game.lastTime=now;
+
+  update(dt);
+  draw();
+
+  game.rafId=requestAnimationFrame(loop);
+}
+
+// ============================================================
+// INPUT
+// ============================================================
+window.addEventListener('mousemove',e=>{
+  game.mouse.x=e.clientX;
+  game.mouse.y=e.clientY;
+});
+window.addEventListener('mousedown',e=>{
+  if(e.button===0)game.mouseDown=true;
+});
+window.addEventListener('mouseup',e=>{
+  if(e.button===0)game.mouseDown=false;
+});
+window.addEventListener('keydown',e=>{
+  if(e.code==='Space'){
+    e.preventDefault();
+    if(game.playing&&player)player.dash();
+    return;
+  }
+  keys[e.code]=true;
+});
+window.addEventListener('keyup',e=>{
+  keys[e.code]=false;
+});
+
+canvas.addEventListener('touchstart',e=>{
+  e.preventDefault();
+  const t=e.touches[0];
+  game.mouse.x=t.clientX;
+  game.mouse.y=t.clientY;
+  game.mouseDown=true;
+},{passive:false});
+canvas.addEventListener('touchmove',e=>{
+  e.preventDefault();
+  const t=e.touches[0];
+  game.mouse.x=t.clientX;
+  game.mouse.y=t.clientY;
+},{passive:false});
+canvas.addEventListener('touchend',e=>{
+  e.preventDefault();
+  game.mouseDown=false;
+},{passive:false});
+
+btnStart.addEventListener('click',startGame);
+btnWinRestart.addEventListener('click',startGame);
+btnLoseRestart.addEventListener('click',startGame);
+
+// ============================================================
+// INIT
+// ============================================================
+resize();
+ctx.fillStyle='#050505';
+ctx.fillRect(0,0,W,H);
+</script>
+</body>
+</html>
